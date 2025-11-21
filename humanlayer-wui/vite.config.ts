@@ -7,6 +7,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 const host = process.env.TAURI_DEV_HOST
 const port = process.env.VITE_PORT ? parseInt(process.env.VITE_PORT) : 1420
 const hmrPort = port + 1
+const useRemoteTauriShim = process.env.VITE_REMOTE_TAURI_SHIM === '1'
 
 // Determine if this is a Sentry-enabled build (has SENTRY_ORG configured)
 const isSentryRelease = !!process.env.SENTRY_ORG && process.env.NODE_ENV === 'production'
@@ -70,9 +71,33 @@ export default defineConfig(async () => ({
   ],
 
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
+    alias: (() => {
+      const baseAliases: Record<string, string> = {
+        '@': path.resolve(__dirname, './src'),
+      }
+
+      if (!useRemoteTauriShim) {
+        return baseAliases
+      }
+
+      const shim = (p: string) => path.resolve(__dirname, './src/remote-tauri-shim', p)
+
+      return {
+        ...baseAliases,
+        '@tauri-apps/plugin-fs': shim('plugin-fs.ts'),
+        '@tauri-apps/api/path': shim('api-path.ts'),
+        '@tauri-apps/api/core': shim('api-core.ts'),
+        '@tauri-apps/api/window': shim('api-window.ts'),
+        '@tauri-apps/api/webview': shim('api-webview.ts'),
+        '@tauri-apps/api/webviewWindow': shim('api-webviewWindow.ts'),
+        '@tauri-apps/api/event': shim('api-event.ts'),
+        '@tauri-apps/plugin-global-shortcut': shim('plugin-global-shortcut.ts'),
+        '@tauri-apps/plugin-notification': shim('plugin-notification.ts'),
+        '@tauri-apps/plugin-clipboard-manager': shim('plugin-clipboard-manager.ts'),
+        '@tauri-apps/plugin-opener': shim('plugin-opener.ts'),
+        '@tauri-apps/plugin-log': shim('plugin-log.ts'),
+      }
+    })(),
   },
 
   // Generate source maps for production builds (required for Sentry)
