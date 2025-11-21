@@ -9,6 +9,7 @@ const PORT = parseInt(process.env.HUMANLAYER_REMOTE_BRIDGE_PORT || '17650', 10)
 const repoRoot = path.resolve(__dirname, '..', '..')
 const humanlayerDir = path.join(os.homedir(), '.humanlayer')
 const windowStatePath = path.join(humanlayerDir, 'bridge-window-state.json')
+const DEBUG = process.env.HUMANLAYER_REMOTE_BRIDGE_DEBUG === '1'
 
 type DaemonInfo = {
   port: number
@@ -277,6 +278,14 @@ const server = createServer(async (req, res) => {
   const url = parse(req.url || '', true)
   const pathname = url.pathname || '/'
 
+  // Basic request logging when enabled
+  if (DEBUG) {
+    console.log(
+      `[remote-bridge] ${req.method} ${pathname} ${url.search || ''}` +
+        (req.headers['content-length'] ? ` len=${req.headers['content-length']}` : ''),
+    )
+  }
+
   // Basic CORS for dev convenience
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
@@ -319,8 +328,14 @@ const server = createServer(async (req, res) => {
   if (pathname === '/invoke' && req.method === 'POST') {
     try {
       const body = await readBody(req)
+      if (DEBUG) {
+        console.log(`[remote-bridge] invoke body: ${JSON.stringify(body)}`)
+      }
       return handleInvoke(res, body)
     } catch (error: any) {
+      if (DEBUG) {
+        console.error('[remote-bridge] invoke error', error)
+      }
       return sendJson(res, 500, { error: error.message })
     }
   }

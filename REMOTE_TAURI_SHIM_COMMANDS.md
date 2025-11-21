@@ -27,6 +27,7 @@ Wichtig:
 - `HUMANLAYER_REMOTE_BRIDGE_DAEMON_BIN` (Pfad zu `hld-dev`/`hld`)
 - `HUMANLAYER_REMOTE_BRIDGE_DAEMON_PORT` (Falls der Bridge-Daemon-Start einen festen Port nutzen soll)
 - `HUMANLAYER_BRIDGE_BRANCH` (Branch-ID/Version-Override für den Daemon)
+- `HUMANLAYER_REMOTE_BRIDGE_DEBUG=1` (Request-/Invoke-Logging der Bridge)
 
 ## Daemon (WSL) manuell starten
 ```bash
