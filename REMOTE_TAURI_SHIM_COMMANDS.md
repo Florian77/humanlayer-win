@@ -15,6 +15,16 @@ VITE_REMOTE_TAURI_SHIM=1 \
 VITE_TAURI_BRIDGE_URL=http://localhost:17650 \
 VITE_HUMANLAYER_DAEMON_URL=http://localhost:7777 \  # falls Daemon extern läuft
 bun run tauri dev
+
+Bridge-Autostart-Szenario (loggt nach `HUMANLAYER_REMOTE_BRIDGE_LOG_BASE`):
+```bash
+HUMANLAYER_REMOTE_BRIDGE_AUTOSTART=1 \
+HUMANLAYER_REMOTE_PORT=7777 \
+HUMANLAYER_REMOTE_SOCKET=$HOME/.humanlayer/daemon-remote.sock \
+HUMANLAYER_REMOTE_DB=$HOME/.humanlayer/daemon-remote.db \
+HUMANLAYER_REMOTE_BRIDGE_LOG_BASE=/path/zu/dev-logs/home-hl-logs \
+./scripts/dev-bridge.sh
+```
 ```
 
 Wichtig:
@@ -28,6 +38,9 @@ Wichtig:
 - `HUMANLAYER_REMOTE_BRIDGE_DAEMON_PORT` (Falls der Bridge-Daemon-Start einen festen Port nutzen soll)
 - `HUMANLAYER_BRIDGE_BRANCH` (Branch-ID/Version-Override für den Daemon)
 - `HUMANLAYER_REMOTE_BRIDGE_DEBUG=1` (Request-/Invoke-Logging der Bridge)
+- `HUMANLAYER_REMOTE_BRIDGE_AUTOSTART` (Default: 1; 0 = kein Daemon-Autostart)
+- `HUMANLAYER_REMOTE_PORT` / `HUMANLAYER_REMOTE_SOCKET` / `HUMANLAYER_REMOTE_DB` (Autostart-Einstellungen)
+- `HUMANLAYER_REMOTE_BRIDGE_LOG_BASE` (Basis-Pfad für Daemon-Logs; Default `~/.humanlayer/logs/remote-bridge`)
 
 ## Daemon (WSL) manuell starten
 ```bash

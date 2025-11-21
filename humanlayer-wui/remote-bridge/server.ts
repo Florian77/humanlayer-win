@@ -1,6 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { parse } from 'url'
-import { promises as fs, constants as fsConstants } from 'fs'
+import { promises as fs, constants as fsConstants, createWriteStream } from 'fs'
 import path from 'path'
 import os from 'os'
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process'
@@ -11,6 +11,9 @@ const humanlayerDir = path.join(os.homedir(), '.humanlayer')
 const windowStatePath = path.join(humanlayerDir, 'bridge-window-state.json')
 const DEBUG = process.env.HUMANLAYER_REMOTE_BRIDGE_DEBUG === '1'
 const AUTOSTART_DAEMON = process.env.HUMANLAYER_REMOTE_BRIDGE_AUTOSTART !== '0'
+const LOG_BASE = process.env.HUMANLAYER_REMOTE_BRIDGE_LOG_BASE
+  ? expandHome(process.env.HUMANLAYER_REMOTE_BRIDGE_LOG_BASE)
+  : path.join(humanlayerDir, 'logs', 'remote-bridge')
 
 type DaemonInfo = {
   port: number
@@ -159,6 +162,7 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
 
   await fs.mkdir(path.dirname(databasePath), { recursive: true })
   await fs.mkdir(path.dirname(socketPath), { recursive: true })
+  await fs.mkdir(LOG_BASE, { recursive: true })
 
   const env = {
     ...process.env,
@@ -167,11 +171,26 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
     HUMANLAYER_DAEMON_SOCKET: socketPath,
     HUMANLAYER_DATABASE_PATH: databasePath,
     HUMANLAYER_DAEMON_VERSION_OVERRIDE: branchId,
+    HUMANLAYER_LOG_LEVEL: process.env.HUMANLAYER_LOG_LEVEL || 'debug',
+    HUMANLAYER_DEBUG: process.env.HUMANLAYER_DEBUG || 'true',
+    GIN_MODE: process.env.GIN_MODE || 'debug',
   }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const logFile = path.join(LOG_BASE, `daemon-remote-${timestamp}.log`)
+  const logStream = createWriteStream(logFile, { flags: 'a' })
 
   const child = spawn(bin, [], {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  // Tee stdout/stderr to log file (and keep existing parsing)
+  child.stdout.on('data', chunk => {
+    logStream.write(chunk)
+  })
+  child.stderr.on('data', chunk => {
+    logStream.write(chunk)
   })
 
   let actualPort = desiredPort
@@ -191,6 +210,7 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
   })
 
   child.on('exit', code => {
+    logStream.end()
     daemonProcess = null
     if (daemonInfo) {
       daemonInfo.is_running = false

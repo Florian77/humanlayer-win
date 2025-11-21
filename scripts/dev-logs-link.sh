@@ -8,7 +8,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEV_LOGS_DIR="${ROOT_DIR}/dev-logs"
 
 target="$HOME/.humanlayer/logs"
-link="${DEV_LOGS_DIR}/wui-logs"
+link="${DEV_LOGS_DIR}/home-hl-logs"
 
 mkdir -p "$DEV_LOGS_DIR"
 if [[ -d "$target" ]]; then

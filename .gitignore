@@ -224,3 +224,5 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+dev-logs/
