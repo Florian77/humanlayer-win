@@ -12,8 +12,10 @@
     "check": "bun run typecheck && bun test"
   },
   "dependencies": {
-    "eventsource": "^4.0.0"
+    "eventsource": "^4.0.0",
+    "turbo": "^2.5.8"
   },
+  "packageManager": "bun@1.2.23",
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.7.0",
     "@types/eventsource": "^1.1.15",

@@ -1,0 +1,43 @@
+# Root-level caches/builds
+node_modules
+.turbo
+dist
+build
+.next
+.vercel
+coverage
+.pnp
+.pnp.js
+
+# HLD TypeScript SDK
+hld/sdk/typescript/node_modules
+hld/sdk/typescript/.turbo
+hld/sdk/typescript/dist
+hld/sdk/typescript/.openapi-generator
+hld/sdk/typescript/coverage
+hld/sdk/typescript/*.tsbuildinfo
+hld/sdk/typescript/*.log
+
+# WUI
+humanlayer-wui/node_modules
+humanlayer-wui/.turbo
+humanlayer-wui/.next
+humanlayer-wui/out
+humanlayer-wui/build
+humanlayer-wui/dist
+humanlayer-wui/.vercel
+humanlayer-wui/coverage
+
+# hlyr
+hlyr/node_modules
+hlyr/.turbo
+
+# apps/react
+apps/react/node_modules
+apps/react/.turbo
+apps/react/coverage
+
+# Binaries
+hld/hld-nightly
+hld/hld-nightly.exe
+hld/hld-dev

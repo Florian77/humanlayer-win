@@ -1,6 +1,8 @@
 .PHONY: setup
 setup: ## Set up the repository with all dependencies and builds
-	hack/setup_repo.sh
+# 	hack/setup_repo.ps1
+	@echo "SKIPPING"
+
 
 # CI-specific targets
 .PHONY: setup-ci ci-tools
@@ -345,6 +347,24 @@ daemon-dev: daemon-dev-build
 
 # Run dev WUI with custom socket
 .PHONY: wui-dev
+ifeq ($(OS),Windows_NT)
+wui-dev: ## Run CodeLayer (WUI) in development mode. Use POSTHOG=true to enable analytics debugging.
+ifdef POSTHOG
+	@pwsh -NoProfile -ExecutionPolicy Bypass -Command "$$ErrorActionPreference='Stop'; \
+$$humanlayerDir = Join-Path $$env:USERPROFILE '.humanlayer'; \
+$$env:HUMANLAYER_DAEMON_SOCKET = Join-Path $$humanlayerDir 'daemon-dev.sock'; \
+$$env:VITE_PUBLIC_POSTHOG_KEY = 'phc_de6RVF0G7CkTzv2UvxHddSk7nfFnE5QWD7KmZV5KfSo'; \
+$$env:VITE_PUBLIC_POSTHOG_HOST = 'https://us.i.posthog.com'; \
+Set-Location humanlayer-wui; \
+bun run tauri dev"
+else
+	@pwsh -NoProfile -ExecutionPolicy Bypass -Command "$$ErrorActionPreference='Stop'; \
+$$humanlayerDir = Join-Path $$env:USERPROFILE '.humanlayer'; \
+$$env:HUMANLAYER_DAEMON_SOCKET = Join-Path $$humanlayerDir 'daemon-dev.sock'; \
+Set-Location humanlayer-wui; \
+bun run tauri dev"
+endif
+else
 wui-dev: ## Run CodeLayer (WUI) in development mode. Use POSTHOG=true to enable analytics debugging.
 ifdef POSTHOG
 	@echo "Running CodeLayer with PostHog analytics enabled (nightly key)"
@@ -355,6 +375,7 @@ ifdef POSTHOG
 		bun run tauri dev
 else
 	cd humanlayer-wui && HUMANLAYER_DAEMON_SOCKET=~/.humanlayer/daemon-dev.sock bun run tauri dev
+endif
 endif
 
 # Run Storybook for WUI component development
