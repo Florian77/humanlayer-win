@@ -10,6 +10,7 @@ const repoRoot = path.resolve(__dirname, '..', '..')
 const humanlayerDir = path.join(os.homedir(), '.humanlayer')
 const windowStatePath = path.join(humanlayerDir, 'bridge-window-state.json')
 const DEBUG = process.env.HUMANLAYER_REMOTE_BRIDGE_DEBUG === '1'
+const AUTOSTART_DAEMON = process.env.HUMANLAYER_REMOTE_BRIDGE_AUTOSTART !== '0'
 
 type DaemonInfo = {
   port: number
@@ -346,4 +347,27 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[remote-bridge] listening on http://localhost:${PORT}`)
   console.log(`[remote-bridge] repo root: ${repoRoot}`)
+
+  // Optional daemon autostart
+  if (AUTOSTART_DAEMON) {
+    const envPort = Number(process.env.HUMANLAYER_REMOTE_PORT || '0') || 7777
+    const envSocket = process.env.HUMANLAYER_REMOTE_SOCKET || path.join(humanlayerDir, 'daemon-remote.sock')
+    const envDb = process.env.HUMANLAYER_REMOTE_DB || path.join(humanlayerDir, 'daemon-remote.db')
+    const envBranch = process.env.HUMANLAYER_BRIDGE_BRANCH || 'remote-bridge'
+
+    startDaemon({
+      port: envPort,
+      socketPath: envSocket,
+      databasePath: envDb,
+      branchId: envBranch,
+    }).then(info => {
+      console.log(
+        `[remote-bridge] autostart daemon OK: port=${info.port} socket=${info.socket_path} db=${info.database_path} branch=${info.branch_id}`,
+      )
+    }).catch(err => {
+      console.error('[remote-bridge] autostart daemon failed:', err)
+    })
+  } else {
+    console.log('[remote-bridge] daemon autostart disabled (HUMANLAYER_REMOTE_BRIDGE_AUTOSTART=0)')
+  }
 })

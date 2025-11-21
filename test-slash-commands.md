@@ -49,3 +49,36 @@
 - [ ] All 5 test cases pass
 - [ ] No console errors
 - [ ] Slash commands work identically in draft and active sessions
+
+
+curl -s -X POST http://localhost:17650/invoke -H 'Content-Type: application/json' -d '{"cmd":"get_daemon_info"}'
+curl -s -X POST http://localhost:17650/invoke -H 'Content-Type: application/json' -d '{"cmd":"start_daemon","args":{"port":7777}}'
+
+VITE_REMOTE_TAURI_SHIM=1 VITE_TAURI_BRIDGE_URL=http://localhost:17650 VITE_HUMANLAYER_DAEMON_URL=http://localhost:7777 bun run tauri dev
+VITE_REMOTE_TAURI_SHIM=1 VITE_TAURI_BRIDGE_URL=http://localhost:17650 VITE_HUMANLAYER_DAEMON_URL=http://localhost:7777 bun run dev
+
+
+<tool_use_error>Error calling tool (Write): MCP error -32603: MCP error -32603: Failed to process approval: Failed to connect to daemon: connect ENOENT /home/flori/.humanlayer/daemon-remote.sock</tool_use_error>
+
+
+Der Daemon wurde über die remote-bridge gestartet, per invoke befehl.
+
+
+
+cd humanlayer-wui && bun run remote-bridge
+
+
+
+-> curl -s -X POST http://localhost:17650/invoke -H 'Content-Type: application/json' -d '{"cmd":"start_daemon","args":{"port":7777}}'
+
+
+
+Wenn claude code files schreiben will und ein approval braucht, kam dieser Fehler hier:
+
+
+
+<tool_use_error>Error calling tool (Write): MCP error -32603: MCP error -32603: Failed to process approval: Failed to connect to daemon: connect ENOENT /home/flori/.humanlayer/daemon-remote.sock</tool_use_error>
+
+
+
+Wird der MCP Server richtig mit gestaret oder ist da was noch nciht ganz zusammen?
