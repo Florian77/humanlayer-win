@@ -15,6 +15,42 @@ const LOG_BASE = process.env.HUMANLAYER_REMOTE_BRIDGE_LOG_BASE
   ? expandHome(process.env.HUMANLAYER_REMOTE_BRIDGE_LOG_BASE)
   : path.join(humanlayerDir, 'logs', 'remote-bridge')
 
+// Prepare bridge log stream
+let bridgeLogStream: any = null
+;(async () => {
+  try {
+    await fs.mkdir(LOG_BASE, { recursive: true })
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    const bridgeLogFile = path.join(LOG_BASE, `bridge-${ts}.log`)
+    bridgeLogStream = createWriteStream(bridgeLogFile, { flags: 'a' })
+
+    const origLog = console.log
+    const origError = console.error
+    console.log = (...args: any[]) => {
+      origLog(...args)
+      if (bridgeLogStream) {
+        bridgeLogStream.write(args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n')
+      }
+    }
+    console.error = (...args: any[]) => {
+      origError(...args)
+      if (bridgeLogStream) {
+        bridgeLogStream.write(args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n')
+      }
+    }
+
+    process.on('exit', () => {
+      if (bridgeLogStream) bridgeLogStream.end()
+    })
+    process.on('SIGINT', () => {
+      if (bridgeLogStream) bridgeLogStream.end()
+      process.exit()
+    })
+  } catch (e) {
+    console.error('[remote-bridge] failed to init bridge log stream', e)
+  }
+})()
+
 type DaemonInfo = {
   port: number
   pid: number
