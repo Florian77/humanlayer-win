@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/humanlayer/humanlayer/hld/config"
 	"github.com/humanlayer/humanlayer/hld/rpc"
 	"github.com/humanlayer/humanlayer/hld/store"
 )
@@ -15,6 +16,8 @@ import (
 // client provides a JSON-RPC 2.0 client for communicating with the HumanLayer daemon
 type client struct {
 	socketPath string
+	address    string
+	network    string
 	conn       net.Conn
 	mu         sync.Mutex
 	id         int64
@@ -25,13 +28,20 @@ type client struct {
 
 // New creates a new client that connects to the daemon's Unix socket
 func New(socketPath string) (Client, error) {
-	conn, err := net.Dial("unix", socketPath)
+	spec, err := config.ParseSocketSpec(socketPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to daemon at %s: %w", socketPath, err)
+		return nil, fmt.Errorf("invalid socket configuration: %w", err)
+	}
+
+	conn, err := net.Dial(spec.Network, spec.Address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon at %s: %w", spec.Raw, err)
 	}
 
 	return &client{
-		socketPath: socketPath,
+		socketPath: spec.Raw,
+		address:    spec.Address,
+		network:    spec.Network,
 		conn:       conn,
 	}, nil
 }
@@ -39,7 +49,12 @@ func New(socketPath string) (Client, error) {
 // Subscribe subscribes to events from the daemon
 func (c *client) Subscribe(req rpc.SubscribeRequest) (<-chan rpc.EventNotification, error) {
 	// Create a separate connection for subscription
-	conn, err := net.Dial("unix", c.socketPath)
+	network := c.network
+	if network == "" {
+		network = "unix"
+	}
+
+	conn, err := net.Dial(network, c.address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create subscription connection: %w", err)
 	}
@@ -363,7 +378,12 @@ func (c *client) Reconnect() error {
 	}
 
 	// Try to reconnect
-	conn, err := net.Dial("unix", c.socketPath)
+	network := c.network
+	if network == "" {
+		network = "unix"
+	}
+
+	conn, err := net.Dial(network, c.address)
 	if err != nil {
 		return fmt.Errorf("failed to reconnect to daemon: %w", err)
 	}

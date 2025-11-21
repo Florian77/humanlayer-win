@@ -3,6 +3,10 @@ import { EventEmitter } from 'events'
 import { homedir } from 'os'
 import { join } from 'path'
 
+type SocketEndpoint =
+  | { type: 'unix'; path: string }
+  | { type: 'tcp'; host: string; port: number }
+
 interface JsonRpcRequest {
   jsonrpc: '2.0'
   method: string
@@ -114,12 +118,14 @@ export class DaemonClient extends EventEmitter {
 
   constructor(socketPath?: string) {
     super()
-    this.socketPath = socketPath || join(homedir(), '.humanlayer', 'daemon.sock')
+    const defaultSocket =
+      process.platform === 'win32' ? 'tcp://127.0.0.1:17888' : join(homedir(), '.humanlayer', 'daemon.sock')
+    this.socketPath = socketPath || defaultSocket
   }
 
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.conn = connect(this.socketPath, () => {
+      this.conn = createSocketConnection(this.socketPath, () => {
         resolve()
       })
 
@@ -241,7 +247,7 @@ export class DaemonClient extends EventEmitter {
 
   private async createSubscriptionConnection(): Promise<Socket> {
     return new Promise((resolve, reject) => {
-      const conn = connect(this.socketPath, () => {
+      const conn = createSocketConnection(this.socketPath, () => {
         resolve(conn)
       })
 
@@ -395,6 +401,48 @@ export class DaemonClient extends EventEmitter {
     this.close()
     await this.connect()
   }
+}
+
+function expandHomePath(path: string): string {
+  if (path.startsWith('~/')) {
+    return join(homedir(), path.slice(2))
+  }
+  return path
+}
+
+function parseSocketEndpoint(socketPath: string): SocketEndpoint {
+  const normalized = socketPath.trim()
+
+  if (normalized.startsWith('tcp://')) {
+    const [, hostPort] = normalized.split('tcp://')
+    const [host, port] = hostPort.split(':')
+    const parsedPort = Number(port)
+    if (!host || Number.isNaN(parsedPort)) {
+      throw new Error(`Invalid TCP socket address: ${socketPath}`)
+    }
+    return { type: 'tcp', host, port: parsedPort }
+  }
+
+  const directHostPortMatch = normalized.match(/^([^/\\]+):(\d+)$/)
+  if (process.platform === 'win32' && directHostPortMatch) {
+    const host = directHostPortMatch[1]
+    const parsedPort = Number(directHostPortMatch[2])
+    if (!Number.isNaN(parsedPort)) {
+      return { type: 'tcp', host, port: parsedPort }
+    }
+  }
+
+  return { type: 'unix', path: expandHomePath(normalized) }
+}
+
+function createSocketConnection(socketPath: string, onConnect: () => void): Socket {
+  const endpoint = parseSocketEndpoint(socketPath)
+
+  if (endpoint.type === 'tcp') {
+    return connect({ host: endpoint.host, port: endpoint.port }, onConnect)
+  }
+
+  return connect(endpoint.path, onConnect)
 }
 
 // Helper function for retrying connections

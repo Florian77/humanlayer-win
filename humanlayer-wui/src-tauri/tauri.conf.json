@@ -39,7 +39,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["bin/hld", "bin/humanlayer"]
+    "resources": ["bin/hld", "bin/hld.exe", "bin/humanlayer", "bin/humanlayer.exe"]
   },
   "plugins": {
     "fs": {

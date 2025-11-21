@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"os"
 	"testing"
 	"time"
 
@@ -40,10 +39,7 @@ func TestDaemonLifecycle(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test 1: Connect to daemon
-	conn, err := net.Dial("unix", socketPath)
-	if err != nil {
-		t.Fatalf("failed to connect to daemon: %v", err)
-	}
+	conn := dialSocket(t, socketPath)
 	defer func() { _ = conn.Close() }()
 
 	// Test 2: Send health check request
@@ -104,9 +100,7 @@ func TestDaemonLifecycle(t *testing.T) {
 	}
 
 	// Test 6: Socket should be cleaned up
-	if _, err := os.Stat(socketPath); !os.IsNotExist(err) {
-		t.Error("socket file not cleaned up after shutdown")
-	}
+	socketShouldBeRemoved(t, socketPath)
 }
 
 func TestDaemonRefusesDoubleStart(t *testing.T) {
@@ -179,7 +173,13 @@ func TestDaemonConcurrentConnections(t *testing.T) {
 
 	for i := 0; i < numClients; i++ {
 		go func(clientID int) {
-			conn, err := net.Dial("unix", socketPath)
+			spec, err := config.ParseSocketSpec(socketPath)
+			if err != nil {
+				t.Errorf("client %d: failed to parse socket path: %v", clientID, err)
+				done <- false
+				return
+			}
+			conn, err := net.Dial(spec.Network, spec.Address)
 			if err != nil {
 				t.Errorf("client %d: failed to connect: %v", clientID, err)
 				done <- false
@@ -268,10 +268,7 @@ func TestIntegrationRPCRoundTrip(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Connect as a client
-	conn, err := net.Dial("unix", d.socketPath)
-	if err != nil {
-		t.Fatalf("failed to connect to daemon: %v", err)
-	}
+	conn := dialSocket(t, d.socketPath)
 	defer func() { _ = conn.Close() }()
 
 	// Send health check request

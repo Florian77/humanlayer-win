@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 
 	"github.com/spf13/viper"
@@ -18,6 +19,13 @@ var (
 	DefaultCLICommand   = "hlyr" // CLI command to execute
 	DefaultClaudePath   = ""     // Empty means auto-detect
 )
+
+func init() {
+	// Windows apps (CLI + WUI) can't use Unix domain sockets. Default to TCP.
+	if runtime.GOOS == "windows" {
+		DefaultSocketPath = "tcp://127.0.0.1:17888"
+	}
+}
 
 // Config represents the daemon configuration
 type Config struct {
@@ -54,9 +62,11 @@ func Load() (*Config, error) {
 	v.SetConfigType("json")
 
 	// Add config paths in order of preference
-	v.AddConfigPath(".")                                                       // Current directory
-	v.AddConfigPath(getDefaultConfigDir())                                     // XDG config directory
-	v.AddConfigPath(filepath.Join(os.Getenv("HOME"), ".config", "humanlayer")) // Fallback config directory
+	v.AddConfigPath(".")                   // Current directory
+	v.AddConfigPath(getDefaultConfigDir()) // XDG config directory
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		v.AddConfigPath(filepath.Join(homeDir, ".config", "humanlayer")) // Fallback config directory
+	}
 
 	// Set environment variable prefix and automatic env reading
 	v.SetEnvPrefix("HUMANLAYER")
@@ -147,6 +157,9 @@ func (c *Config) Validate() error {
 	// Just validate socket path is not empty
 	if c.SocketPath == "" {
 		return fmt.Errorf("socket path cannot be empty")
+	}
+	if _, err := ParseSocketSpec(c.SocketPath); err != nil {
+		return fmt.Errorf("invalid socket path: %w", err)
 	}
 	return nil
 }

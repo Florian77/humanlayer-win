@@ -11,12 +11,15 @@ export function getInvocationName(): string {
 }
 
 export function getDefaultSocketPath(invocationName: string): string {
+  const isWindows = process.platform === 'win32'
+  const baseTcp = isWindows ? 'tcp://127.0.0.1:' : '~/.humanlayer/'
+
   // Use nightly socket for nightly variants
   if (invocationName === 'codelayer-nightly' || invocationName === 'humanlayer-nightly') {
-    return '~/.humanlayer/daemon-nightly.sock'
+    return isWindows ? `${baseTcp}17889` : `${baseTcp}daemon-nightly.sock`
   }
   // Use regular socket for all other invocations
-  return '~/.humanlayer/daemon.sock'
+  return isWindows ? `${baseTcp}17888` : `${baseTcp}daemon.sock`
 }
 
 export function shouldLaunchApp(invocationName: string, hasArgs: boolean): boolean {

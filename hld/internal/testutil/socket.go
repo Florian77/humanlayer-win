@@ -2,7 +2,10 @@ package testutil
 
 import (
 	"fmt"
+	"net"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -11,8 +14,19 @@ import (
 func SocketPath(t *testing.T, suffix string) string {
 	t.Helper()
 
+	// On Windows we default to TCP sockets for better compatibility.
+	if runtime.GOOS == "windows" {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("failed to allocate test TCP port: %v", err)
+		}
+		addr := l.Addr().String()
+		_ = l.Close()
+		return fmt.Sprintf("tcp://%s", addr)
+	}
+
 	// Keep it short - macOS has a 104 char limit for socket paths
-	path := fmt.Sprintf("/tmp/hld-%d-%s.sock", os.Getpid(), suffix)
+	path := filepath.Join(os.TempDir(), fmt.Sprintf("hld-%d-%s.sock", os.Getpid(), suffix))
 
 	// Ensure any existing socket is removed first
 	_ = os.Remove(path)

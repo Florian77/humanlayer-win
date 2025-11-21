@@ -1,5 +1,7 @@
 use crate::get_branch_id;
+#[cfg(unix)]
 use nix::sys::signal::{self, Signal};
+#[cfg(unix)]
 use nix::unistd::Pid;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -60,8 +62,13 @@ impl DaemonManager {
             // Still need to return daemon info for external daemon
             if let Ok(port_str) = env::var("HUMANLAYER_DAEMON_HTTP_PORT") {
                 if let Ok(port) = port_str.parse::<u16>() {
-                    let socket_path = env::var("HUMANLAYER_DAEMON_SOCKET")
-                        .unwrap_or_else(|_| format!("~/.humanlayer/daemon-{port}.sock"));
+                    let socket_path = env::var("HUMANLAYER_DAEMON_SOCKET").unwrap_or_else(|_| {
+                        if cfg!(target_os = "windows") {
+                            format!("tcp://127.0.0.1:{port}")
+                        } else {
+                            format!("~/.humanlayer/daemon-{port}.sock")
+                        }
+                    });
                     let database_path = env::var("HUMANLAYER_DATABASE_PATH")
                         .unwrap_or_else(|_| "~/.humanlayer/daemon.db".to_string());
 
@@ -143,14 +150,28 @@ impl DaemonManager {
         // Socket path - check environment variable first
         let socket_path = if let Ok(sock_path) = env::var("HUMANLAYER_DAEMON_SOCKET") {
             log::info!("[Tauri] Using socket path from HUMANLAYER_DAEMON_SOCKET: {sock_path}");
-            PathBuf::from(sock_path)
+            sock_path
+        } else if cfg!(target_os = "windows") {
+            if is_dev {
+                "tcp://127.0.0.1:17890".to_string()
+            } else if is_nightly {
+                "tcp://127.0.0.1:17889".to_string()
+            } else {
+                "tcp://127.0.0.1:17888".to_string()
+            }
         } else if is_dev {
-            humanlayer_dir.join(format!("daemon-{branch_id}.sock"))
+            humanlayer_dir
+                .join(format!("daemon-{branch_id}.sock"))
+                .to_string_lossy()
+                .to_string()
         } else if is_nightly {
             // Nightly build uses daemon-nightly.sock
-            humanlayer_dir.join("daemon-nightly.sock")
+            humanlayer_dir
+                .join("daemon-nightly.sock")
+                .to_string_lossy()
+                .to_string()
         } else {
-            humanlayer_dir.join("daemon.sock")
+            humanlayer_dir.join("daemon.sock").to_string_lossy().to_string()
         };
 
         // Get daemon binary path (macOS only)
@@ -162,10 +183,7 @@ impl DaemonManager {
             "HUMANLAYER_DATABASE_PATH".to_string(),
             database_path.to_str().unwrap().to_string(),
         ));
-        env_vars.push((
-            "HUMANLAYER_DAEMON_SOCKET".to_string(),
-            socket_path.to_str().unwrap().to_string(),
-        ));
+        env_vars.push(("HUMANLAYER_DAEMON_SOCKET".to_string(), socket_path.clone()));
         env_vars.push(("HUMANLAYER_DAEMON_HTTP_PORT".to_string(), "0".to_string()));
         env_vars.push((
             "HUMANLAYER_DAEMON_HTTP_HOST".to_string(),
@@ -189,7 +207,7 @@ impl DaemonManager {
         log::info!("[Tauri] Executing daemon at path: {daemon_path:?}");
         log::info!("[Tauri] Daemon environment: database_path={}, socket_path={}, port=0, branch_id={branch_id}",
                    database_path.display(),
-                   socket_path.display());
+                   socket_path);
 
         // Log current PATH that will be inherited by daemon
         if let Ok(path) = std::env::var("PATH") {
@@ -348,7 +366,7 @@ impl DaemonManager {
             port,
             pid,
             database_path: database_path.to_str().unwrap().to_string(),
-            socket_path: socket_path.to_str().unwrap().to_string(),
+            socket_path: socket_path.clone(),
             branch_id: branch_id.clone(),
             is_running: true,
         };
@@ -412,38 +430,50 @@ impl DaemonManager {
         if let Some(mut child) = process.take() {
             let pid = child.id();
 
-            // Try SIGTERM first (graceful shutdown)
-            signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM)
-                .map_err(|e| format!("Failed to send SIGTERM to daemon: {e}"))?;
+            #[cfg(unix)]
+            {
+                // Try SIGTERM first (graceful shutdown)
+                signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM)
+                    .map_err(|e| format!("Failed to send SIGTERM to daemon: {e}"))?;
 
-            log::info!("[Tauri] Sent SIGTERM to daemon process (PID: {pid})");
+                log::info!("[Tauri] Sent SIGTERM to daemon process (PID: {pid})");
 
-            // Wait for process to exit gracefully (with timeout)
-            let start = std::time::Instant::now();
-            let timeout = std::time::Duration::from_secs(15);
+                // Wait for process to exit gracefully (with timeout)
+                let start = std::time::Instant::now();
+                let timeout = std::time::Duration::from_secs(15);
 
-            loop {
-                match child.try_wait() {
-                    Ok(Some(_)) => {
-                        log::info!("[Tauri] Daemon process exited gracefully after SIGTERM");
-                        break;
-                    }
-                    Ok(None) => {
-                        if start.elapsed() > timeout {
-                            // Force kill if it doesn't exit within timeout
-                            log::warn!("[Tauri] Daemon didn't exit gracefully, sending SIGKILL");
-                            child
-                                .kill()
-                                .map_err(|e| format!("Failed to kill daemon: {e}"))?;
-                            let _ = child.wait();
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(_)) => {
+                            log::info!("[Tauri] Daemon process exited gracefully after SIGTERM");
                             break;
                         }
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                    }
-                    Err(e) => {
-                        return Err(format!("Failed to check daemon status: {e}"));
+                        Ok(None) => {
+                            if start.elapsed() > timeout {
+                                // Force kill if it doesn't exit within timeout
+                                log::warn!("[Tauri] Daemon didn't exit gracefully, sending SIGKILL");
+                                child
+                                    .kill()
+                                    .map_err(|e| format!("Failed to kill daemon: {e}"))?;
+                                let _ = child.wait();
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to check daemon status: {e}"));
+                        }
                     }
                 }
+            }
+
+            #[cfg(not(unix))]
+            {
+                log::info!("[Tauri] Requesting daemon shutdown on Windows (PID: {pid})");
+                child
+                    .kill()
+                    .map_err(|e| format!("Failed to kill daemon: {e}"))?;
+                let _ = child.wait();
             }
 
             // Update store to mark daemon as not running
@@ -474,6 +504,17 @@ impl DaemonManager {
 }
 
 fn get_daemon_path(app_handle: &AppHandle, is_dev: bool) -> Result<PathBuf, String> {
+    let dev_binary = if cfg!(target_os = "windows") {
+        "hld-dev.exe"
+    } else {
+        "hld-dev"
+    };
+    let release_binary = if cfg!(target_os = "windows") {
+        "hld.exe"
+    } else {
+        "hld"
+    };
+
     if is_dev {
         // In dev mode, look for hld-dev in the project
         let current =
@@ -486,13 +527,13 @@ fn get_daemon_path(app_handle: &AppHandle, is_dev: bool) -> Result<PathBuf, Stri
                 .and_then(|p| p.parent()) // humanlayer root
                 .ok_or("Failed to get parent directory")?
                 .join("hld")
-                .join("hld-dev")
+                .join(dev_binary)
         } else {
             current
                 .parent() // Go up from humanlayer-wui to humanlayer
                 .ok_or("Failed to get parent directory")?
                 .join("hld")
-                .join("hld-dev")
+                .join(dev_binary)
         };
 
         if dev_path.exists() {
@@ -509,7 +550,7 @@ fn get_daemon_path(app_handle: &AppHandle, is_dev: bool) -> Result<PathBuf, Stri
             .resource_dir()
             .map_err(|e| format!("Failed to get resource directory: {e}"))?;
 
-        Ok(resource_dir.join("bin").join("hld"))
+        Ok(resource_dir.join("bin").join(release_binary))
     }
 }
 

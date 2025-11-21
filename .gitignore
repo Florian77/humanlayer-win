@@ -179,6 +179,7 @@ cython_debug/
 .Trashes
 
 .idea/
+.vs/
 
 hlyr/blah.txt
 hld/hld-dev
@@ -224,3 +225,7 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Windows specifics
+hld/hld-nightly.exe
+bun.lock
