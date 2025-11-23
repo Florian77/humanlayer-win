@@ -179,6 +179,7 @@ cython_debug/
 .Trashes
 
 .idea/
+.vs/
 
 hlyr/blah.txt
 hld/hld-dev
