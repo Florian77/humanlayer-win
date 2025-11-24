@@ -550,10 +550,13 @@ pub fn run() {
                 let shortcut = app.handle().global_shortcut();
 
                 // Register the shortcut with a callback
-                shortcut.on_shortcut("cmd+shift+h", move |_app, _shortcut, _event| {
+                if let Err(err) = shortcut.on_shortcut("cmd+shift+h", move |_app, _shortcut, _event| {
                     // Show quick launcher window
                     let _ = show_quick_launcher(app_handle.clone());
-                })?;
+                }) {
+                    // Don't abort setup if another app already has the hotkey
+                    log::warn!("[Tauri] Could not register quick-launch hotkey (maybe already registered elsewhere): {err}");
+                }
             }
 
             // Check if auto-launch is disabled
