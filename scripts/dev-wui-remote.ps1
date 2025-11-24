@@ -16,16 +16,17 @@ $remoteHost = try {
     # If the bridge/daemon runs in WSL, discover its IP so Windows can reach it.
     $ip = wsl -e sh -c 'ip -4 addr show eth0 | grep -oP "(?<=inet\\s)\\d+(\\.\\d+){3}"' 2>$null
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($ip)) { $ip.Trim() } else { "localhost" }
-} catch {
+}
+catch {
     "localhost"
 }
 
 $bridgePort = "17650"
-$socketPath = Join-Path $homeDir ".humanlayer/daemon-remote.sock"
+# $socketPath = Join-Path $homeDir ".humanlayer/daemon-remote.sock"
 $daemonPort = "7777"
 
 $env:HUMANLAYER_WUI_AUTOLAUNCH_DAEMON = "false"
-$env:HUMANLAYER_DAEMON_SOCKET = $socketPath
+# $env:HUMANLAYER_DAEMON_SOCKET = $socketPath
 $env:VITE_HUMANLAYER_DAEMON_URL = "http://${remoteHost}:${daemonPort}"
 $env:VITE_REMOTE_TAURI_SHIM = "1"
 $env:VITE_TAURI_BRIDGE_URL = "http://${remoteHost}:${bridgePort}"
@@ -43,4 +44,4 @@ Write-Host "  TAURI_CONFIG=$tauriConfigPath"
 Write-Host "  TAURI_FEATURES=$($env:TAURI_FEATURES)"
 
 Set-Location (Join-Path $rootDir "humanlayer-wui")
-bun run tauri dev -- --config "$tauriConfigPath"
+bun run tauri dev --target "x86_64-pc-windows-msvc" --config "$tauriConfigPath"
