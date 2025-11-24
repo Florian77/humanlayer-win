@@ -489,13 +489,13 @@ fn get_daemon_path(app_handle: &AppHandle, is_dev: bool) -> Result<PathBuf, Stri
                 .and_then(|p| p.parent()) // humanlayer root
                 .ok_or("Failed to get parent directory")?
                 .join("hld")
-                .join("hld-dev")
+                .join("hld-dev.exe")
         } else {
             current
                 .parent() // Go up from humanlayer-wui to humanlayer
                 .ok_or("Failed to get parent directory")?
                 .join("hld")
-                .join("hld-dev")
+                .join("hld-dev.exe")
         };
 
         if dev_path.exists() {
@@ -512,7 +512,7 @@ fn get_daemon_path(app_handle: &AppHandle, is_dev: bool) -> Result<PathBuf, Stri
             .resource_dir()
             .map_err(|e| format!("Failed to get resource directory: {e}"))?;
 
-        Ok(resource_dir.join("bin").join("hld"))
+        Ok(resource_dir.join("bin").join("hld.exe"))
     }
 }
 

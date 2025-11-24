@@ -22,17 +22,17 @@ catch {
 }
 
 $bridgePort = "17650"
-# $socketPath = Join-Path $homeDir ".humanlayer/daemon-remote.sock"
+$socketPath = Join-Path $homeDir ".humanlayer/daemon-remote.sock"
 $daemonPort = "7777"
 
-$env:HUMANLAYER_WUI_AUTOLAUNCH_DAEMON = "false"
-# $env:HUMANLAYER_DAEMON_SOCKET = $socketPath
-$env:VITE_HUMANLAYER_DAEMON_URL = "http://${remoteHost}:${daemonPort}"
-$env:VITE_REMOTE_TAURI_SHIM = "1"
-$env:VITE_TAURI_BRIDGE_URL = "http://${remoteHost}:${bridgePort}"
+$env:HUMANLAYER_WUI_AUTOLAUNCH_DAEMON = "true"
+$env:HUMANLAYER_DAEMON_SOCKET = $socketPath
+# $env:VITE_HUMANLAYER_DAEMON_URL = "http://${remoteHost}:${daemonPort}"
+# $env:VITE_REMOTE_TAURI_SHIM = "1"
+# $env:VITE_TAURI_BRIDGE_URL = "http://${remoteHost}:${bridgePort}"
 
-$tauriConfigPath = (Join-Path (Join-Path $rootDir "humanlayer-wui") "src-tauri/tauri.remote-only.conf.json")
-$env:TAURI_FEATURES = "remote-only"
+$tauriConfigPath = (Join-Path (Join-Path $rootDir "humanlayer-wui") "src-tauri/tauri.windows.conf.json")
+# $env:TAURI_FEATURES = "remote-only"
 
 Write-Host "Starting WUI with:"
 Write-Host "  HUMANLAYER_REMOTE_HOST=$remoteHost"
