@@ -74,11 +74,14 @@ export default defineConfig(async () => ({
     alias: (() => {
       const baseAliases: Record<string, string> = {
         '@': path.resolve(__dirname, './src'),
+        '@humanlayer/hld-sdk': path.resolve(__dirname, '../hld/sdk/typescript/dist'),
       }
 
-      if (!useRemoteTauriShim) {
+      /*if (!useRemoteTauriShim) {
         return baseAliases
-      }
+      }*/
+
+      console.log('*** STARTING WITH REMOTE TAURI SHIM ALIASES ***')
 
       const shim = (p: string) => path.resolve(__dirname, './src/remote-tauri-shim', p)
 
