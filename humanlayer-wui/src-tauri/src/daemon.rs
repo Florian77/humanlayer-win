@@ -1,3 +1,6 @@
+#[cfg(windows)]
+use nix_win_shim as nix;
+
 use crate::get_branch_id;
 use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;

@@ -1858,6 +1858,7 @@ dependencies = [
  "fix-path-env",
  "log",
  "nix",
+ "nix-win-shim",
  "objc",
  "regex",
  "reqwest 0.11.27",
@@ -2578,6 +2579,13 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "memoffset",
+]
+
+[[package]]
+name = "nix-win-shim"
+version = "0.30.1"
+dependencies = [
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

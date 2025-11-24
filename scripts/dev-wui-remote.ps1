@@ -25,7 +25,7 @@ $bridgePort = "17650"
 # $socketPath = Join-Path $homeDir ".humanlayer/daemon-remote.sock"
 $daemonPort = "7777"
 
-$env:HUMANLAYER_WUI_AUTOLAUNCH_DAEMON = "false"
+$env:HUMANLAYER_WUI_AUTOLAUNCH_DAEMON = "true"
 # $env:HUMANLAYER_DAEMON_SOCKET = $socketPath
 $env:VITE_HUMANLAYER_DAEMON_URL = "http://${remoteHost}:${daemonPort}"
 $env:VITE_REMOTE_TAURI_SHIM = "1"

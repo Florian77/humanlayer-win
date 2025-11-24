@@ -1,5 +1,8 @@
+// Use real daemon only on non-Windows + not remote-only
+#[cfg(all(not(feature = "remote-only"), not(target_os = "windows")))]
 mod daemon;
 
+#[cfg(all(not(feature = "remote-only"), not(target_os = "windows")))]
 use daemon::{DaemonInfo, DaemonManager};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -8,6 +11,50 @@ use std::path::PathBuf;
 use std::process::Command;
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_store::StoreExt;
+
+// Stub implementation for Windows or remote-only builds
+#[cfg(any(feature = "remote-only", target_os = "windows"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaemonInfo {
+    pub port: u16,
+    pub pid: u32,
+    pub database_path: String,
+    pub socket_path: String,
+    pub branch_id: String,
+    pub is_running: bool,
+}
+
+#[cfg(any(feature = "remote-only", target_os = "windows"))]
+#[derive(Clone)]
+pub struct DaemonManager;
+
+#[cfg(any(feature = "remote-only", target_os = "windows"))]
+impl DaemonManager {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub async fn start_daemon(
+        &self,
+        _app_handle: &tauri::AppHandle,
+        _is_dev: bool,
+        _branch_override: Option<String>,
+    ) -> Result<DaemonInfo, String> {
+        Err("Daemon not available in remote-only build".to_string())
+    }
+
+    pub fn stop_daemon(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn get_info(&self) -> Option<DaemonInfo> {
+        None
+    }
+
+    pub fn is_running(&self) -> bool {
+        false
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WindowState {
@@ -561,7 +608,7 @@ pub fn run() {
                 .map(|v| v.to_lowercase() != "false")
                 .unwrap_or(true);
 
-            if should_autolaunch {
+            if should_autolaunch && !cfg!(any(feature = "remote-only", target_os = "windows")) {
                 // Start daemon automatically
                 let app_handle_clone = app.app_handle().clone();
                 let daemon_manager_for_autolaunch = daemon_manager.clone();
