@@ -11,6 +11,7 @@ const humanlayerDir = path.join(os.homedir(), '.humanlayer')
 const windowStatePath = path.join(humanlayerDir, 'bridge-window-state.json')
 const DEBUG = process.env.HUMANLAYER_REMOTE_BRIDGE_DEBUG === '1'
 const AUTOSTART_DAEMON = process.env.HUMANLAYER_REMOTE_BRIDGE_AUTOSTART !== '0'
+const SPLIT_DAEMON_LOGS = process.env.HUMANLAYER_REMOTE_BRIDGE_SPLIT_LOGS === '1'
 const LOG_BASE = process.env.HUMANLAYER_REMOTE_BRIDGE_LOG_BASE
   ? expandHome(process.env.HUMANLAYER_REMOTE_BRIDGE_LOG_BASE)
   : path.join(humanlayerDir, 'logs', 'remote-bridge')
@@ -218,6 +219,74 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
   const logFile = path.join(LOG_BASE, `daemon-remote-${timestamp}.log`)
   const logStream = createWriteStream(logFile, { flags: 'a' })
 
+  // Optional split log streams
+  type LogStreams = {
+    gin: ReturnType<typeof createWriteStream> | null
+    debug: ReturnType<typeof createWriteStream> | null
+    info: ReturnType<typeof createWriteStream> | null
+    warn: ReturnType<typeof createWriteStream> | null
+    error: ReturnType<typeof createWriteStream> | null
+    other: ReturnType<typeof createWriteStream> | null
+  }
+  const splitStreams: LogStreams = {
+    gin: null,
+    debug: null,
+    info: null,
+    warn: null,
+    error: null,
+    other: null,
+  }
+
+  if (SPLIT_DAEMON_LOGS) {
+    splitStreams.gin = createWriteStream(path.join(LOG_BASE, `daemon-remote-${timestamp}-gin.log`), { flags: 'a' })
+    splitStreams.debug = createWriteStream(path.join(LOG_BASE, `daemon-remote-${timestamp}-debug.log`), { flags: 'a' })
+    splitStreams.info = createWriteStream(path.join(LOG_BASE, `daemon-remote-${timestamp}-info.log`), { flags: 'a' })
+    splitStreams.warn = createWriteStream(path.join(LOG_BASE, `daemon-remote-${timestamp}-warn.log`), { flags: 'a' })
+    splitStreams.error = createWriteStream(path.join(LOG_BASE, `daemon-remote-${timestamp}-error.log`), { flags: 'a' })
+    splitStreams.other = createWriteStream(path.join(LOG_BASE, `daemon-remote-${timestamp}-other.log`), { flags: 'a' })
+  }
+
+  // Helper to route log lines to appropriate streams
+  const routeLogLine = (line: string) => {
+    if (!SPLIT_DAEMON_LOGS) return
+
+    // GIN HTTP request logs
+    if (line.startsWith('[GIN]')) {
+      splitStreams.gin?.write(line + '\n')
+      return
+    }
+
+    // Structured logs: time=<timestamp> level=<LEVEL> ...
+    const levelMatch = line.match(/^time=\S+\s+level=(\w+)/)
+    if (levelMatch) {
+      const level = levelMatch[1].toLowerCase()
+      switch (level) {
+        case 'debug':
+          splitStreams.debug?.write(line + '\n')
+          return
+        case 'info':
+          splitStreams.info?.write(line + '\n')
+          return
+        case 'warn':
+        case 'warning':
+          splitStreams.warn?.write(line + '\n')
+          return
+        case 'error':
+        case 'fatal':
+          splitStreams.error?.write(line + '\n')
+          return
+      }
+    }
+
+    // Unmatched lines go to "other"
+    splitStreams.other?.write(line + '\n')
+  }
+
+  // Close all split streams on exit
+  const closeSplitStreams = () => {
+    Object.values(splitStreams).forEach(stream => stream?.end())
+  }
+
   const child = spawn(bin, [], {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -240,6 +309,9 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
       // Echo daemon stdout with a consistent prefix
       process.stderr.write(`[DMN] ${line}\n`)
 
+      // Route to split log files if enabled
+      routeLogLine(line)
+
       const match = line.match(/HTTP_PORT=(\d+)/)
       if (match) {
         actualPort = Number(match[1])
@@ -252,6 +324,7 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
   child.stdout.on('end', () => {
     if (stdoutBuffer.trim()) {
       process.stderr.write(`[DMN] ${stdoutBuffer}\n`)
+      routeLogLine(stdoutBuffer)
       const match = stdoutBuffer.match(/HTTP_PORT=(\d+)/)
       if (match) {
         actualPort = Number(match[1])
@@ -273,16 +346,19 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
     for (const line of lines) {
       if (!line.trim()) continue
       process.stderr.write(`[DMN] ${line}\n`)
+      routeLogLine(line)
     }
   })
   child.stderr.on('end', () => {
     if (stderrBuffer.trim()) {
       process.stderr.write(`[DMN] ${stderrBuffer}\n`)
+      routeLogLine(stderrBuffer)
     }
   })
 
   child.on('exit', code => {
     logStream.end()
+    closeSplitStreams()
     daemonProcess = null
     if (daemonInfo) {
       daemonInfo.is_running = false
