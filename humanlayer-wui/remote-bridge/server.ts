@@ -17,39 +17,39 @@ const LOG_BASE = process.env.HUMANLAYER_REMOTE_BRIDGE_LOG_BASE
 
 // Prepare bridge log stream
 let bridgeLogStream: any = null
-;(async () => {
-  try {
-    await fs.mkdir(LOG_BASE, { recursive: true })
-    const ts = new Date().toISOString().replace(/[:.]/g, '-')
-    const bridgeLogFile = path.join(LOG_BASE, `bridge-${ts}.log`)
-    bridgeLogStream = createWriteStream(bridgeLogFile, { flags: 'a' })
+  ; (async () => {
+    try {
+      await fs.mkdir(LOG_BASE, { recursive: true })
+      const ts = new Date().toISOString().replace(/[:.]/g, '-')
+      const bridgeLogFile = path.join(LOG_BASE, `bridge-${ts}.log`)
+      bridgeLogStream = createWriteStream(bridgeLogFile, { flags: 'a' })
 
-    const origLog = console.log
-    const origError = console.error
-    console.log = (...args: any[]) => {
-      origLog(...args)
-      if (bridgeLogStream) {
-        bridgeLogStream.write(args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n')
+      const origLog = console.log
+      const origError = console.error
+      console.log = (...args: any[]) => {
+        origLog(...args)
+        if (bridgeLogStream) {
+          bridgeLogStream.write(args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n')
+        }
       }
-    }
-    console.error = (...args: any[]) => {
-      origError(...args)
-      if (bridgeLogStream) {
-        bridgeLogStream.write(args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n')
+      console.error = (...args: any[]) => {
+        origError(...args)
+        if (bridgeLogStream) {
+          bridgeLogStream.write(args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n')
+        }
       }
-    }
 
-    process.on('exit', () => {
-      if (bridgeLogStream) bridgeLogStream.end()
-    })
-    process.on('SIGINT', () => {
-      if (bridgeLogStream) bridgeLogStream.end()
-      process.exit()
-    })
-  } catch (e) {
-    console.error('[remote-bridge] failed to init bridge log stream', e)
-  }
-})()
+      process.on('exit', () => {
+        if (bridgeLogStream) bridgeLogStream.end()
+      })
+      process.on('SIGINT', () => {
+        if (bridgeLogStream) bridgeLogStream.end()
+        process.exit()
+      })
+    } catch (e) {
+      console.error('[BRG] failed to init bridge log stream', e)
+    }
+  })()
 
 type DaemonInfo = {
   port: number
@@ -164,6 +164,7 @@ async function fileExists(p: string): Promise<boolean> {
   }
 }
 
+
 async function resolveDaemonBinary(): Promise<string> {
   const override = process.env.HUMANLAYER_REMOTE_BRIDGE_DAEMON_BIN
   if (override) return expandHome(override)
@@ -195,6 +196,7 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
   )
   const branchId = args?.branchId || process.env.HUMANLAYER_BRIDGE_BRANCH || 'remote-bridge'
   const bin = await resolveDaemonBinary()
+  console.log(`[BRG] daemon binary: ${bin}`)
 
   await fs.mkdir(path.dirname(databasePath), { recursive: true })
   await fs.mkdir(path.dirname(socketPath), { recursive: true })
@@ -221,28 +223,62 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
-  // Tee stdout/stderr to log file (and keep existing parsing)
-  child.stdout.on('data', chunk => {
-    logStream.write(chunk)
-  })
-  child.stderr.on('data', chunk => {
-    logStream.write(chunk)
-  })
-
   let actualPort = desiredPort
+
+  // Collect stdout/stderr, write to file, and prefix each emitted line
+  let stdoutBuffer = ''
   child.stdout.on('data', chunk => {
-    const text = chunk.toString()
-    const match = text.match(/HTTP_PORT=(\d+)/)
-    if (match) {
-      actualPort = Number(match[1])
-      if (daemonInfo) {
-        daemonInfo.port = actualPort
+    logStream.write(chunk)
+
+    stdoutBuffer += chunk.toString()
+    const lines = stdoutBuffer.split(/\r?\n/)
+    stdoutBuffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.trim()) continue
+
+      // Echo daemon stdout with a consistent prefix
+      process.stderr.write(`[DMN] ${line}\n`)
+
+      const match = line.match(/HTTP_PORT=(\d+)/)
+      if (match) {
+        actualPort = Number(match[1])
+        if (daemonInfo) {
+          daemonInfo.port = actualPort
+        }
+      }
+    }
+  })
+  child.stdout.on('end', () => {
+    if (stdoutBuffer.trim()) {
+      process.stderr.write(`[DMN] ${stdoutBuffer}\n`)
+      const match = stdoutBuffer.match(/HTTP_PORT=(\d+)/)
+      if (match) {
+        actualPort = Number(match[1])
+        if (daemonInfo) {
+          daemonInfo.port = actualPort
+        }
       }
     }
   })
 
+  let stderrBuffer = ''
   child.stderr.on('data', chunk => {
-    process.stderr.write(`[bridge-daemon] ${chunk}`)
+    logStream.write(chunk)
+
+    stderrBuffer += chunk.toString()
+    const lines = stderrBuffer.split(/\r?\n/)
+    stderrBuffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.trim()) continue
+      process.stderr.write(`[DMN] ${line}\n`)
+    }
+  })
+  child.stderr.on('end', () => {
+    if (stderrBuffer.trim()) {
+      process.stderr.write(`[DMN] ${stderrBuffer}\n`)
+    }
   })
 
   child.on('exit', code => {
@@ -251,7 +287,7 @@ async function startDaemon(args: any): Promise<DaemonInfo> {
     if (daemonInfo) {
       daemonInfo.is_running = false
     }
-    console.warn(`daemon exited with code ${code}`)
+    console.warn(`[BRG] daemon exited with code ${code}`)
   })
 
   daemonProcess = child
@@ -338,8 +374,8 @@ const server = createServer(async (req, res) => {
   // Basic request logging when enabled
   if (DEBUG) {
     console.log(
-      `[remote-bridge] ${req.method} ${pathname} ${url.search || ''}` +
-        (req.headers['content-length'] ? ` len=${req.headers['content-length']}` : ''),
+      `[BRG] ${req.method} ${pathname} ${url.search || ''}` +
+      (req.headers['content-length'] ? ` len=${req.headers['content-length']}` : ''),
     )
   }
 
@@ -386,12 +422,12 @@ const server = createServer(async (req, res) => {
     try {
       const body = await readBody(req)
       if (DEBUG) {
-        console.log(`[remote-bridge] invoke body: ${JSON.stringify(body)}`)
+        console.log(`[BRG] invoke body: ${JSON.stringify(body)}`)
       }
       return handleInvoke(res, body)
     } catch (error: any) {
       if (DEBUG) {
-        console.error('[remote-bridge] invoke error', error)
+        console.error('[BRG] invoke error', error)
       }
       return sendJson(res, 500, { error: error.message })
     }
@@ -401,8 +437,8 @@ const server = createServer(async (req, res) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`[remote-bridge] listening on http://localhost:${PORT}`)
-  console.log(`[remote-bridge] repo root: ${repoRoot}`)
+  console.log(`[BRG] listening on http://localhost:${PORT}`)
+  console.log(`[BRG] repo root: ${repoRoot}`)
 
   // Optional daemon autostart
   if (AUTOSTART_DAEMON) {
@@ -418,12 +454,12 @@ server.listen(PORT, () => {
       branchId: envBranch,
     }).then(info => {
       console.log(
-        `[remote-bridge] autostart daemon OK: port=${info.port} socket=${info.socket_path} db=${info.database_path} branch=${info.branch_id}`,
+        `[BRG] autostart daemon OK: port=${info.port} socket=${info.socket_path} db=${info.database_path} branch=${info.branch_id}`,
       )
     }).catch(err => {
-      console.error('[remote-bridge] autostart daemon failed:', err)
+      console.error('[BRG] autostart daemon failed:', err)
     })
   } else {
-    console.log('[remote-bridge] daemon autostart disabled (HUMANLAYER_REMOTE_BRIDGE_AUTOSTART=0)')
+    console.log('[BRG] daemon autostart disabled (HUMANLAYER_REMOTE_BRIDGE_AUTOSTART=0)')
   }
 })
